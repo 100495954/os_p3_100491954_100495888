@@ -13,16 +13,44 @@
 #include <sys/wait.h>
 
 
+
+pthread_mutex_t mutex;
+pthread_mutex_t producers_mutex;
+pthread_mutex_t consumers_mutex; 
+pthread_cond_t not_full; 
+pthread_cond_t not_empty; 
+int number_of_operations;
+
 int main (int argc, const char * argv[])
 {
+  if (argc!=4){
+    perror("Not enough arguments");
+    return -1;
+  }
+  pthread_mutex_init(&mutex, NULL);
+  pthread_mutex_init(&producers_mutex, NULL);
+  pthread_mutex_init(&consumers_mutex, NULL);
+  pthread_cond_init(&not_full, NULL);
+  pthread_cond_init(&not_empty,NULL);
+
   int profits = 0;
   int product_stock [5] = {0};
+  int n_producers = atoi(argv[2]);
+  int n_consumers = atoi(argv[2]);
+  int data_file;
+  if (n_producers<0||n_consumers<0){
+    perror("Wrong arguments");
+    return -1;
+  }
+  int producers[n_producers];
+  int consumers[n_consumers];
 
+  if ((data_file = open(argv[1],O_RDONLY,0644))<0){
+    perror("Error opening the file");
+    return -1;
+  }
 
-
-
-
-
+  
   // Output
   printf("Total: %d euros\n", profits);
   printf("Stock:\n");
