@@ -12,19 +12,44 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+// Global variables
+int number_of_operations;
+queue *buffer;
+int op_number;
+int profits = 0;
+int product_stock [5] = {0};
+int operation_count;
+char **op_list;
+struct element
 
-queue *q;
 pthread_mutex_t mutex;
-pthread_mutex_t producers_mutex;
-pthread_mutex_t consumers_mutex; 
 pthread_cond_t not_full; 
 pthread_cond_t not_empty; 
-int number_of_operations;
 
-char **op_list
+// Producer function
+void *producer(void *param){
+  while(operation_count<number_of_operations) {
+    pthread_mutex_lock(&mutex);
+    while(queue_full(buffer)){
+      pthread_cond_wait(&not_full, &mutex);
+    }
+    struct element current_operation;
+    sscanf(op_list[operation_count], "%d %s %d", current_operation.product_id, current_operation.op, current_operation.units);
+    
+    queue_put(buffer, current_operation);
+    operation_count++;
+    pthread_cond_signal(&not_empty);
+    pthread_mutex_unlock(&mutex);
+  }
+  pthread_exit(0);
+}
 
-void producer();
-void consumer();
+
+void *consumer(void *param){
+  
+}
+
+
 
 int main (int argc, const char * argv[])
 {
@@ -32,14 +57,9 @@ int main (int argc, const char * argv[])
     perror("Not enough arguments");
     return -1;
   }
-  pthread_mutex_init(&mutex, NULL);
-  pthread_mutex_init(&producers_mutex, NULL);
-  pthread_mutex_init(&consumers_mutex, NULL);
-  pthread_cond_init(&not_full, NULL);
-  pthread_cond_init(&not_empty,NULL);
+  int buffsize = atoi(argv[4]);
+  queue *buffer = queue_init(buffsize);
 
-  int profits = 0;
-  int product_stock [5] = {0};
   int n_producers = atoi(argv[2]);
   int n_consumers = atoi(argv[2]);
   int data_file;
@@ -47,7 +67,7 @@ int main (int argc, const char * argv[])
     perror("Wrong arguments");
     return -1;
   }
-  int ths[n_producers+ n_consumers];
+  pthread_t ths[n_producers+ n_consumers];
 
   if ((data_file = open(argv[1],O_RDONLY,0644))<0){
     perror("Error opening the file");
@@ -58,12 +78,44 @@ int main (int argc, const char * argv[])
       perror("Error when extracting data from the file");
       return -1;
   }
-  char str[100];
-  while (fgets(op_list[i], 100, data_file)) {
 
+  if(n_producers>number_of_operations||n_consumers>number_of_operations){
+    perror("Too much threads");
+    return -1;
   }
 
+  op_list= (char**)malloc(number_of_operations * sizeof(char *));
+  for (i=0; i<number_of_operations; i++){
+    op_list[i]=(char*)malloc(64 * sizeof(char));
+  }
+
+  for(int i = 0; i<number_of_operations, i++) {
+    fgets(op_list[i], 100, fd);
+  }
+
+
+  pthread_mutex_init(&mutex, NULL);
+  pthread_cond_init(&not_full, NULL);
+  pthread_cond_init(&not_empty,NULL);
+
+  for (int i = 0; i<n_producers;i++){
+    pthread_create(&ths[i], NULL, producer, );
+  }
+
+  for (int i = 0; i<n_consumers, i++){
+    pthread_create(&ths[i+n_producers], NULL, consumer, );
+  }
+
+  for (int i =0; i<(n_producers+ n_consumers)){
+    pthread_join(ths[i],NULL);
+  }
   
+  pthread_mutex_destroy(&mutex);
+  pthread_cond_destroy(&not_empty);
+  pthread_cond_destroy(&not_full);
+
+  free(op_list);
+  fclose(data_file);
   // Output
   printf("Total: %d euros\n", profits);
   printf("Stock:\n");
