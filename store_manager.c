@@ -13,13 +13,18 @@
 #include <sys/wait.h>
 
 
-
+queue *q;
 pthread_mutex_t mutex;
 pthread_mutex_t producers_mutex;
 pthread_mutex_t consumers_mutex; 
 pthread_cond_t not_full; 
 pthread_cond_t not_empty; 
 int number_of_operations;
+
+char **op_list
+
+void producer();
+void consumer();
 
 int main (int argc, const char * argv[])
 {
@@ -42,12 +47,20 @@ int main (int argc, const char * argv[])
     perror("Wrong arguments");
     return -1;
   }
-  int producers[n_producers];
-  int consumers[n_consumers];
+  int ths[n_producers+ n_consumers];
 
   if ((data_file = open(argv[1],O_RDONLY,0644))<0){
     perror("Error opening the file");
     return -1;
+  }
+
+  if (fscanf(data_file, "%d\n", &number_of_operations) < 0) {
+      perror("Error when extracting data from the file");
+      return -1;
+  }
+  char str[100];
+  while (fgets(op_list[i], 100, data_file)) {
+
   }
 
   
