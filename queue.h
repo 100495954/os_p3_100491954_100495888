@@ -19,9 +19,6 @@ typedef struct queue {
   int curr_size; //It is the current number of elements in the queue
   int max_size; //It is the maximum number of elements in the queue
   
-  pthread_mutex_t mutex;
-  pthread_cond_t full;
-  pthread_cond_t empty;
 }queue;
 
 queue* queue_init (int size);

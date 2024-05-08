@@ -1,5 +1,3 @@
-//SSOO-P3 23/24
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,141 +10,144 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-
-
-
 // Global variables
-int purchase_cost[5]={2,5,15,25,100};
-int sell_price[5]={3,10,20,40,125};
+int purchase_cost[5] = {2, 5, 15, 25, 100};
+int sell_price[5] = {3, 10, 20, 40, 125};
 int number_of_operations;
 queue *buffer;
 int op_number;
 int profits = 0;
-int product_stock [5] = {0};
-int insert_count;
-int pop_count;
-char **op_list;
-struct element
+int product_stock[5] = {0};
+int insert_count; // Counter for tracking the number of operations inserted into the buffer
+int pop_count;    // Counter for tracking the number of operations consumed from the buffer
+char **op_list;   // Array to store operation strings read from file
 
 pthread_mutex_t mutex;
-pthread_cond_t not_full; 
-pthread_cond_t not_empty; 
+pthread_cond_t not_full;
+pthread_cond_t not_empty;
+
+// Structure to represent an operation
+struct element;
 
 // Producer function
-void *producer(void *param){
-  while(insert_count<number_of_operations) {
-    pthread_mutex_lock(&mutex);
-    while(queue_full(buffer)){
-      pthread_cond_wait(&not_full, &mutex);
+void *producer(void *param) {
+    while (insert_count < number_of_operations) {
+        pthread_mutex_lock(&mutex);
+        while (queue_full(buffer)) {
+            pthread_cond_wait(&not_full, &mutex); // Wait while buffer is full
+        }
+        struct element current_operation;
+        char operation_name[20];
+        // Extract operation details from the operation string
+        sscanf(op_list[insert_count], "%d %s %d", &current_operation.product_id, operation_name, &current_operation.units);
+        if (strcmp(operation_name, "PURCHASE") == 0) {
+            current_operation.op = 0;
+        } else if (strcmp(operation_name, "SALE") == 0) {
+            current_operation.op = 1;
+        }
+        // Put the operation into the buffer
+        queue_put(buffer, &current_operation);
+        insert_count++;
+        pthread_cond_signal(&not_empty); // Signal that buffer is not empty
+        pthread_mutex_unlock(&mutex);
     }
-    struct element current_operation;
-    sscanf(op_list[insert_count], "%d %s %d", current_operation.product_id, current_operation.op, current_operation.units);
-    
-    queue_put(buffer, current_operation);
-    insert_count++;
-    pthread_cond_signal(&not_empty);
-    pthread_mutex_unlock(&mutex);
-  }
-  pthread_exit(0);
+    pthread_exit(0);
 }
 
-
-void *consumer(void *param){
-  while(pop_count<number_of_operations) {
-    pthread_mutex_lock(&mutex);
-    while(queue_full(buffer)){
-      pthread_cond_wait(&not_empty, &mutex);
+// Consumer function
+void *consumer(void *param) {
+    while (pop_count < number_of_operations) {
+        pthread_mutex_lock(&mutex);
+        while (queue_empty(buffer)) {
+            pthread_cond_wait(&not_empty, &mutex); // Wait while buffer is empty
+        }
+        struct element current_operation;
+        current_operation = *queue_get(buffer); // Get an operation from the buffer
+        if (current_operation.op == 0) {        // Purchase operation
+            profits -= purchase_cost[current_operation.product_id - 1] * current_operation.units;
+            product_stock[current_operation.product_id - 1] += current_operation.units;
+        } else if (current_operation.op == 1) { // Sale operation
+            profits += sell_price[current_operation.product_id - 1] * current_operation.units;
+            product_stock[current_operation.product_id - 1] -= current_operation.units;
+        }
+        pop_count++;
+        pthread_cond_signal(&not_full); // Signal that buffer is not full
+        pthread_mutex_unlock(&mutex);
     }
-    struct element current_operation;
-    current_operation = *queue_get(buffer);
-    if (strcmp(current_operation.op, "PURCHASE")==0){
-      profits -= purchase_cost[current_operation.product_id-1]*current_operation.units;
-      product_stock[current_operation.product_id-1]+= current_operation.units
-    }else if(strcmp(current_operation.op, "SELL")==0){
-      profits += purchase_cost[current_operation.product_id-1]*current_operation.units;
-      product_stock[current_operation.product_id-1]-= current_operation.units
-    }
-    pop_count++;
-    pthread_cond_signal(&not_full);
-    pthread_mutex_unlock(&mutex);
-  }
-  pthread_exit(0);
+    pthread_exit(0);
 }
 
+int main(int argc, const char *argv[]) {
+    if (argc < 4) {
+        perror("Not enough arguments");
+        return -1;
+    }
+    int buffsize = atoi(argv[4]);
+    queue *q = queue_init(buffsize);
+    buffer = q;
 
-int main (int argc, const char * argv[])
-{
-  if (argc!=4){
-    perror("Not enough arguments");
-    return -1;
-  }
-  int buffsize = atoi(argv[4]);
-  queue *buffer = queue_init(buffsize);
+    int n_producers = atoi(argv[2]);
+    int n_consumers = atoi(argv[2]);
+    FILE *data_file = fopen(argv[1], "r");
+    if (n_producers < 0 || n_consumers < 0) {
+        perror("Wrong arguments");
+        return -1;
+    }
+    pthread_t ths[n_producers + n_consumers];
 
-  int n_producers = atoi(argv[2]);
-  int n_consumers = atoi(argv[2]);
-  int data_file;
-  if (n_producers<0||n_consumers<0){
-    perror("Wrong arguments");
-    return -1;
-  }
-  pthread_t ths[n_producers+ n_consumers];
+    if (fscanf(data_file, "%d\n", &number_of_operations) < 0) {
+        perror("Error when extracting data from the file");
+        return -1;
+    }
 
-  if ((data_file = open(argv[1],O_RDONLY,0644))<0){
-    perror("Error opening the file");
-    return -1;
-  }
+    if (n_producers > number_of_operations || n_consumers > number_of_operations) {
+        perror("Too many threads");
+        return -1;
+    }
 
-  if (fscanf(data_file, "%d\n", &number_of_operations) < 0) {
-      perror("Error when extracting data from the file");
-      return -1;
-  }
+    op_list = (char **)malloc(number_of_operations * sizeof(char *));
+    for (int i = 0; i < number_of_operations; i++) {
+        op_list[i] = (char *)malloc(64 * sizeof(char));
+    }
 
-  if(n_producers>number_of_operations||n_consumers>number_of_operations){
-    perror("Too much threads");
-    return -1;
-  }
+    for (int i = 0; i < number_of_operations; i++) {
+        fgets(op_list[i], 100, data_file); // Read operation strings from file
+    }
 
-  op_list= (char**)malloc(number_of_operations * sizeof(char *));
-  for (i=0; i<number_of_operations; i++){
-    op_list[i]=(char*)malloc(64 * sizeof(char));
-  }
+    pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&not_full, NULL);
+    pthread_cond_init(&not_empty, NULL);
 
-  for(int i = 0; i<number_of_operations, i++) {
-    fgets(op_list[i], 100, fd);
-  }
+    for (int i = 0; i < n_producers; i++) {
+        pthread_create(&ths[i], NULL, producer, NULL); // Create producer threads
+    }
 
+    for (int i = 0; i < n_consumers; i++) {
+        pthread_create(&ths[i + n_producers], NULL, consumer, NULL); // Create consumer threads
+    }
 
-  pthread_mutex_init(&mutex, NULL);
-  pthread_cond_init(&not_full, NULL);
-  pthread_cond_init(&not_empty,NULL);
+    for (int i = 0; i < (n_producers + n_consumers); i++) {
+        pthread_join(ths[i], NULL); // Wait for all threads to finish
+    }
 
-  for (int i = 0; i<n_producers;i++){
-    pthread_create(&ths[i], NULL, producer, );
-  }
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&not_empty);
+    pthread_cond_destroy(&not_full);
 
-  for (int i = 0; i<n_consumers, i++){
-    pthread_create(&ths[i+n_producers], NULL, consumer, );
-  }
+    free(op_list);
+    fclose(data_file);
 
-  for (int i =0; i<(n_producers+ n_consumers)){
-    pthread_join(ths[i],NULL);
-  }
-  
-  pthread_mutex_destroy(&mutex);
-  pthread_cond_destroy(&not_empty);
-  pthread_cond_destroy(&not_full);
+    // Output
+    printf("Total: %d euros\n", profits);
+    printf("Stock:\n");
+    printf("  Product 1: %d\n", product_stock[0]);
+    printf("  Product 2: %d\n", product_stock[1]);
+    printf("  Product 3: %d\n", product_stock[2]);
+    printf("  Product 4: %d\n", product_stock[3]);
+    printf("  Product 5: %d\n", product_stock[4]);
 
-  free(op_list);
-  fclose(data_file);
-  // Output
-  printf("Total: %d euros\n", profits);
-  printf("Stock:\n");
-  printf("  Product 1: %d\n", product_stock[0]);
-  printf("  Product 2: %d\n", product_stock[1]);
-  printf("  Product 3: %d\n", product_stock[2]);
-  printf("  Product 4: %d\n", product_stock[3]);
-  printf("  Product 5: %d\n", product_stock[4]);
-
-  return 0;
+    queue_destroy(q);
+    queue_destroy(buffer);
+    return 0;
 }
+
