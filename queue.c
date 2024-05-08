@@ -12,6 +12,7 @@ queue* queue_init(int size)
   queue * q = (queue *)malloc(sizeof(queue));
 
   q->max_size = size;
+  q->buffer =(struct element*)malloc(sizeof(struct element)*size);
   q->curr_size = 0;
   q->head = 0;
   q->tail = -1;
@@ -25,7 +26,7 @@ int queue_put(queue *q, struct element *x)
 {
   
   q->tail = (q->tail + 1) % q->max_size; // % is used to go to the beginning of the buffer once the tail reaches the last position of it
-  q->buffer[q->tail] = x; 
+  q->buffer[q->tail] = *x; 
   q->curr_size++;
 
   
@@ -36,8 +37,8 @@ int queue_put(queue *q, struct element *x)
 struct element* queue_get(queue *q)
 {
   struct element* element;
-  
-  element = q->buffer[q->head]; 
+  element = (struct element*)malloc(sizeof(struct element));
+  *element = q->buffer[q->head]; 
   q->head = (q->head+1) % q->max_size;
   q->curr_size--;
   return element;

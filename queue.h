@@ -3,8 +3,7 @@
 #ifndef HEADER_FILE
 #define HEADER_FILE
 #include <pthread.h>
-
-#define MAX_QUEUE_SIZE 50 //Based on the info of file.txt
+ //Based on the info of file.txt
 
 
 struct element {
@@ -14,7 +13,7 @@ struct element {
 };
 
 typedef struct queue {
-  struct element *buffer[MAX_QUEUE_SIZE];
+  struct element *buffer;
   int head, tail;
   int curr_size; //It is the current number of elements in the queue
   int max_size; //It is the maximum number of elements in the queue
