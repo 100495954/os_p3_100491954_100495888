@@ -12,13 +12,19 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+
+
+
 // Global variables
+int purchase_cost[5]={2,5,15,25,100};
+int sell_price[5]={3,10,20,40,125};
 int number_of_operations;
 queue *buffer;
 int op_number;
 int profits = 0;
 int product_stock [5] = {0};
-int operation_count;
+int insert_count;
+int pop_count;
 char **op_list;
 struct element
 
@@ -28,16 +34,16 @@ pthread_cond_t not_empty;
 
 // Producer function
 void *producer(void *param){
-  while(operation_count<number_of_operations) {
+  while(insert_count<number_of_operations) {
     pthread_mutex_lock(&mutex);
     while(queue_full(buffer)){
       pthread_cond_wait(&not_full, &mutex);
     }
     struct element current_operation;
-    sscanf(op_list[operation_count], "%d %s %d", current_operation.product_id, current_operation.op, current_operation.units);
+    sscanf(op_list[insert_count], "%d %s %d", current_operation.product_id, current_operation.op, current_operation.units);
     
     queue_put(buffer, current_operation);
-    operation_count++;
+    insert_count++;
     pthread_cond_signal(&not_empty);
     pthread_mutex_unlock(&mutex);
   }
@@ -46,9 +52,26 @@ void *producer(void *param){
 
 
 void *consumer(void *param){
-  
+  while(pop_count<number_of_operations) {
+    pthread_mutex_lock(&mutex);
+    while(queue_full(buffer)){
+      pthread_cond_wait(&not_empty, &mutex);
+    }
+    struct element current_operation;
+    current_operation = *queue_get(buffer);
+    if (strcmp(current_operation.op, "PURCHASE")==0){
+      profits -= purchase_cost[current_operation.product_id-1]*current_operation.units;
+      product_stock[current_operation.product_id-1]+= current_operation.units
+    }else if(strcmp(current_operation.op, "SELL")==0){
+      profits += purchase_cost[current_operation.product_id-1]*current_operation.units;
+      product_stock[current_operation.product_id-1]-= current_operation.units
+    }
+    pop_count++;
+    pthread_cond_signal(&not_full);
+    pthread_mutex_unlock(&mutex);
+  }
+  pthread_exit(0);
 }
-
 
 
 int main (int argc, const char * argv[])
