@@ -10,21 +10,25 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-// Global variables
-int purchase_cost[5] = {2, 5, 15, 25, 100};
-int sell_price[5] = {3, 10, 20, 40, 125};
-int number_of_operations;
-queue *buffer;
-int op_number;
-int profits = 0;
-int product_stock[5] = {0};
-int insert_count; // Counter for tracking the number of operations inserted into the buffer
-int pop_count;    // Counter for tracking the number of operations consumed from the buffer
-char **op_list;   // Array to store operation strings read from file
 
 pthread_mutex_t mutex;
 pthread_cond_t not_full;
 pthread_cond_t not_empty;
+
+// Global variables
+int purchase_cost[5] = {2, 5, 15, 25, 100};
+int sell_price[5] = {3, 10, 20, 40, 125};
+
+int number_of_operations;
+queue *buffer;
+struct element* operator;
+int op_number;
+int profits = 0;
+int product_stock[5] = {0};
+int insert_count; // Counter for tracking the number of operations inserted into the buffer
+int pop_count;    // Counter for tracking the number of operations consumed from the buffer   // Array to store operation strings read from file
+
+
 
 // Structure to represent an operation
 struct element;
@@ -33,18 +37,13 @@ struct element;
 void *producer(void *param) {
     while (insert_count < number_of_operations) {
         pthread_mutex_lock(&mutex);
+        struct element current_operation;
         while (queue_full(buffer)) {
             pthread_cond_wait(&not_full, &mutex); // Wait while buffer is full
         }
-        struct element current_operation;
-        char operation_name[20];
+        
         // Extract operation details from the operation string
-        sscanf(op_list[insert_count], "%d %s %d", &current_operation.product_id, operation_name, &current_operation.units);
-        if (strcmp(operation_name, "PURCHASE") == 0) {
-            current_operation.op = 0;
-        } else if (strcmp(operation_name, "SALE") == 0) {
-            current_operation.op = 1;
-        }
+        current_operation = operator[insert_count];
         // Put the operation into the buffer
         queue_put(buffer, &current_operation);
         insert_count++;
@@ -58,10 +57,11 @@ void *producer(void *param) {
 void *consumer(void *param) {
     while (pop_count < number_of_operations) {
         pthread_mutex_lock(&mutex);
+        struct element current_operation;
         while (queue_empty(buffer)) {
             pthread_cond_wait(&not_empty, &mutex); // Wait while buffer is empty
         }
-        struct element current_operation;
+        
         current_operation = *queue_get(buffer); // Get an operation from the buffer
         if (current_operation.op == 0) {        // Purchase operation
             profits -= purchase_cost[current_operation.product_id - 1] * current_operation.units;
@@ -83,8 +83,8 @@ int main(int argc, const char *argv[]) {
         return -1;
     }
     int buffsize = atoi(argv[4]);
-    queue *q = queue_init(buffsize);
-    buffer = q;
+    buffer = queue_init(buffsize);
+    
 
     int n_producers = atoi(argv[2]);
     int n_consumers = atoi(argv[2]);
@@ -105,13 +105,15 @@ int main(int argc, const char *argv[]) {
         return -1;
     }
 
-    op_list = (char **)malloc(number_of_operations * sizeof(char *));
+    operator = (struct element*)malloc(sizeof(struct element)*number_of_operations);
+    char aux[20];
     for (int i = 0; i < number_of_operations; i++) {
-        op_list[i] = (char *)malloc(64 * sizeof(char));
-    }
-
-    for (int i = 0; i < number_of_operations; i++) {
-        fgets(op_list[i], 100, data_file); // Read operation strings from file
+        fscanf(data_file, "%d %s %d", &operator[i].product_id, aux, &operator[i].units); // Read operation strings from file
+        if (strcmp(aux, "PURCHASE")==0){
+            operator[i].op = 0;
+        }else if (strcmp(aux, "SALE")==0){
+            operator[i].op = 1;
+        }
     }
 
     pthread_mutex_init(&mutex, NULL);
@@ -134,7 +136,7 @@ int main(int argc, const char *argv[]) {
     pthread_cond_destroy(&not_empty);
     pthread_cond_destroy(&not_full);
 
-    free(op_list);
+    free(operator);
     fclose(data_file);
 
     // Output
@@ -146,8 +148,7 @@ int main(int argc, const char *argv[]) {
     printf("  Product 4: %d\n", product_stock[3]);
     printf("  Product 5: %d\n", product_stock[4]);
 
-    queue_destroy(q);
     queue_destroy(buffer);
     return 0;
-}
+} 
 
