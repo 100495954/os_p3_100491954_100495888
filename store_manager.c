@@ -18,13 +18,13 @@ pthread_cond_t not_empty;
 // Global variables
 int purchase_cost[5] = {2, 5, 15, 25, 100};
 int sell_price[5] = {3, 10, 20, 40, 125};
-
+int *profits_global;
+int *product_stock_global;
 int number_of_operations;
 queue *buffer;
 struct element* operator;
 int op_number;
-int profits = 0;
-int product_stock[5] = {0};
+
 int insert_count; // Counter for tracking the number of operations inserted into the buffer
 int pop_count;    // Counter for tracking the number of operations consumed from the buffer   // Array to store operation strings read from file
 
@@ -64,11 +64,11 @@ void *consumer(void *param) {
         
         current_operation = *queue_get(buffer); // Get an operation from the buffer
         if (current_operation.op == 0) {        // Purchase operation
-            profits -= purchase_cost[current_operation.product_id - 1] * current_operation.units;
-            product_stock[current_operation.product_id - 1] += current_operation.units;
+            *profits_global -= purchase_cost[current_operation.product_id - 1] * current_operation.units;
+            product_stock_global[current_operation.product_id - 1] += current_operation.units;
         } else if (current_operation.op == 1) { // Sale operation
-            profits += sell_price[current_operation.product_id - 1] * current_operation.units;
-            product_stock[current_operation.product_id - 1] -= current_operation.units;
+            *profits_global += sell_price[current_operation.product_id - 1] * current_operation.units;
+            product_stock_global[current_operation.product_id - 1] -= current_operation.units;
         }
         pop_count++;
         pthread_cond_signal(&not_full); // Signal that buffer is not full
@@ -85,6 +85,8 @@ int main(int argc, const char *argv[]) {
     int buffsize = atoi(argv[4]);
     buffer = queue_init(buffsize);
     
+    int profits = 0;
+    int product_stock[5] = {0};
 
     int n_producers = atoi(argv[2]);
     int n_consumers = atoi(argv[2]);
@@ -115,6 +117,8 @@ int main(int argc, const char *argv[]) {
             operator[i].op = 1;
         }
     }
+    profits_global = &profits;
+    product_stock_global = product_stock;
 
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&not_full, NULL);
