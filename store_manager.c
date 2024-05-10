@@ -18,8 +18,8 @@ pthread_cond_t not_empty;
 // Global variables
 int purchase_cost[5] = {2, 5, 15, 25, 100};
 int sell_price[5] = {3, 10, 20, 40, 125};
-int profits=0;
-int product_stock[5]={0};
+int sold_stock[5]={0};
+int bought_stock[5]={0};
 int number_of_operations;
 queue *buffer;
 struct element* operator;
@@ -78,11 +78,9 @@ void *consumer(void *param) {
         
         current_operation = *queue_get(buffer); // Get an operation from the buffer
         if (current_operation.op == 0) {        // Purchase operation
-            profits -= purchase_cost[current_operation.product_id - 1] * current_operation.units;
-            product_stock[current_operation.product_id - 1] += current_operation.units;
+            bought_stock[current_operation.product_id - 1] += current_operation.units;
         } else if (current_operation.op == 1) { // Sale operation
-            profits += sell_price[current_operation.product_id - 1] * current_operation.units;
-            product_stock[current_operation.product_id - 1] -= current_operation.units;
+            sold_stock[current_operation.product_id - 1] += current_operation.units;
         }
         pop_count++;
         pthread_cond_signal(&not_full); // Signal that buffer is not full
@@ -151,6 +149,15 @@ int main(int argc, const char *argv[]) {
 
     free(operator);
     fclose(data_file);
+    
+    int profits;
+    int product_stock[5]={0};
+
+    for (int j =0; j<5;j++){
+        profits += (sell_price[j] * sold_stock[j])-(purchase_cost[j]*bought_stock[j]);
+        product_stock[j] = bought_stock[j]-sold_stock[j];
+    }
+
 
     // Output
     printf("Total: %d euros\n", profits);
